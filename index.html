@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>矩形内的反射小点</title>
+<style>
+  html, body {
+    margin: 0; height: 100%;
+    background: #0a0a10;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas { border-radius: 10px; box-shadow: 0 0 60px rgba(80,140,255,.25); }
+</style>
+</head>
+<body>
+<canvas id="cv" width="820" height="520"></canvas>
+<script>
+(() => {
+  const cv  = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+
+  // ---------- 参数 ----------
+  const R     = 60;                 // 小点半径
+  const SPEED = 300;               // 速度 px/s
+  const MIN_X = R,     MAX_X = W - R;   // 圆心可到达的范围
+  const MIN_Y = R,     MAX_Y = H - R;
+
+  const TRAIL_MIN_DIST = 2;        // 每移动 2px 记一个轨迹点
+  const TRAIL_MAX      = 4000;     // 轨迹点上限
+
+  // ---------- 状态 ----------
+  let x, y, vx, vy;
+  const trail = [];
+
+  function init() {
+    x = W / 2;
+    y = H / 2;
+    const a = Math.random() * Math.PI * 2;   // 随机方向
+    vx = Math.cos(a) * SPEED;
+    vy = Math.sin(a) * SPEED;
+    trail.length = 0;
+    trail.push({ x, y });
+  }
+
+  // ---------- 物理：走一步，撞墙就镜像反射 ----------
+  function step(dt) {
+    x += vx * dt;
+    y += vy * dt;
+
+    if (x < MIN_X)      { x = 2 * MIN_X - x; vx = -vx; }   // 左墙
+    else if (x > MAX_X) { x = 2 * MAX_X - x; vx = -vx; }   // 右墙
+    if (y < MIN_Y)      { y = 2 * MIN_Y - y; vy = -vy; }   // 上墙
+    else if (y > MAX_Y) { y = 2 * MAX_Y - y; vy = -vy; }   // 下墙
+
+    // 记录轨迹
+    const last = trail[trail.length - 1];
+    if (Math.hypot(x - last.x, y - last.y) >= TRAIL_MIN_DIST) {
+      trail.push({ x, y });
+      if (trail.length > TRAIL_MAX) trail.shift();
+    }
+  }
+
+  // ---------- 绘制 ----------
+  function draw() {
+    ctx.fillStyle = '#0b0b14';
+    ctx.fillRect(0, 0, W, H);
+
+    // 矩形边框
+    ctx.strokeStyle = 'rgba(120,170,255,.45)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, W - 2, H - 2);
+
+    // 轨迹折线
+    if (trail.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(trail[0].x, trail[0].y);
+      for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.lineTo(x, y);                    // 连到当前实时位置
+      ctx.strokeStyle = 'rgba(90,200,255,.75)';
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    // 小点（带发光）
+    ctx.save();
+    ctx.shadowColor = '#5ac8ff';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#dff4ff';
+    ctx.beginPath();
+    ctx.arc(x, y, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- 主循环：固定步长积分 ----------
+  const DT = 1 / 240;                // 每步 1/240 秒
+  let acc = 0, lastTime = performance.now();
+
+  function frame(now) {
+    let ft = (now - lastTime) / 1000;
+    lastTime = now;
+    if (ft > 0.1) ft = 0.1;          // 切后台回来时避免大跳
+    acc += ft;
+    while (acc >= DT) { step(DT); acc -= DT; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  cv.addEventListener('click', init); // 点击重新随机方向
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
